@@ -68,7 +68,7 @@ col_logo, col_titulo = st.columns([1, 8])
 
 with col_logo:
     # Verifica si la imagen existe para no romper la app si falta el archivo
-    if os.path.exists("mi_logo.png"):
+    if os.path.exists("Logo_Prod_Risk_Solution.png"):
         st.image("Logo_Prod_Risk_Solution.png", width=100)
     else:
         st.warning("Sin Logo")
