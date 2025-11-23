@@ -4,19 +4,21 @@ import numpy as np
 import scipy.stats as stats
 from lifelines import KaplanMeierFitter
 import plotly.graph_objects as go
-import time
+import os # Para verificar si existe la imagen
 
-# Configuración de la página
-st.set_page_config(page_title="Caracterización Probabilística & RAM", layout="wide")
+# --- CONFIGURACIÓN DE PÁGINA E ICONO ---
+# Intentamos usar tu logo como favicon, si falla usamos un emoji
+try:
+    st.set_page_config(page_title="RAM Fitter Pro", layout="wide", page_icon="mi_logo.png")
+except:
+    st.set_page_config(page_title="RAM Fitter Pro", layout="wide", page_icon="📊")
 
-# --- FUNCIONES DE CÁLCULO ---
+# --- FUNCIONES DE CÁLCULO (Sin cambios) ---
 
 def calculate_ad_stat(data, dist_name, params):
-    """Calcula el estadístico Anderson-Darling para una distribución dada."""
     n = len(data)
     sorted_data = np.sort(data)
     
-    # Obtener la CDF teórica según la distribución
     if dist_name == 'Normal':
         cdf = stats.norm.cdf(sorted_data, *params)
     elif dist_name == 'Lognormal':
@@ -28,33 +30,21 @@ def calculate_ad_stat(data, dist_name, params):
     elif dist_name == 'Exponencial':
         cdf = stats.expon.cdf(sorted_data, *params)
     
-    # Evitar log(0)
     cdf = np.clip(cdf, 1e-10, 1 - 1e-10)
-    
-    # Fórmula AD
     S = np.sum((2 * np.arange(1, n + 1) - 1) * (np.log(cdf) + np.log(1 - cdf[::-1])))
-    ad_stat = -n - S / n
-    return ad_stat
+    return -n - S / n
 
 def monte_carlo_p_value(data, dist_name, params, n_sim=1000):
-    """
-    Calcula el p-value usando Monte Carlo.
-    NOTA: n_sim reducido a 1000 por defecto para velocidad en web, 
-    aumentar para mayor precisión.
-    """
     n = len(data)
     ad_orig = calculate_ad_stat(data, dist_name, params)
-    
     count = 0
-    # Simulaciones
+    
     for _ in range(n_sim):
-        # Generar muestra sintética
         if dist_name == 'Normal':
             sim_data = stats.norm.rvs(*params, size=n)
             new_params = stats.norm.fit(sim_data)
         elif dist_name == 'Lognormal':
             sim_data = stats.lognorm.rvs(*params, size=n)
-            # Forzamos floc=0 si queremos lognormal de 2 parámetros estándar
             new_params = stats.lognorm.fit(sim_data, floc=0) 
         elif dist_name == 'Weibull':
             sim_data = stats.weibull_min.rvs(*params, size=n)
@@ -66,198 +56,193 @@ def monte_carlo_p_value(data, dist_name, params, n_sim=1000):
             sim_data = stats.expon.rvs(*params, size=n)
             new_params = stats.expon.fit(sim_data, floc=0)
             
-        ad_sim = calculate_ad_stat(sim_data, dist_name, new_params)
-        
-        if ad_sim >= ad_orig:
+        if calculate_ad_stat(sim_data, dist_name, new_params) >= ad_orig:
             count += 1
             
     return count / n_sim
 
 # --- INTERFAZ DE USUARIO ---
 
-st.title("📊 Herramienta de Caracterización Probabilística (RAM)")
-st.markdown("""
-Esta herramienta ajusta datos a distribuciones (Normal, Lognormal, Weibull, Gamma, Exponencial),
-calcula el **P-Value mediante Monte Carlo** y utiliza **Kaplan-Meier** como referencia empírica.
-""")
+# 1. ENCABEZADO CON LOGO PERSONALIZADO
+col_logo, col_titulo = st.columns([1, 8])
 
-# 1. Panel Lateral - Entrada de Datos
-st.sidebar.header("1. Carga de Datos")
-input_text = st.sidebar.text_area("Pega tus datos aquí (uno por línea o separados por coma):", height=200, value="105.5\n98.2\n134.1\n155.9\n78.4\n112.0\n143.8\n122.5\n95.0\n110.2\n130.5\n85.6\n145.2\n102.3\n118.7")
+with col_logo:
+    # Verifica si la imagen existe para no romper la app si falta el archivo
+    if os.path.exists("mi_logo.png"):
+        st.image("Logo_Prod_Risk_Solution.png", width=100)
+    else:
+        st.warning("Sin Logo")
 
-num_simulaciones = st.sidebar.slider("Simulaciones Monte Carlo (Precisión vs Velocidad)", 100, 5000, 1000)
+with col_titulo:
+    st.title("Herramienta de Caracterización Probabilística (RAM)")
 
-percentil_req = st.sidebar.number_input("Calcular Percentil específico (Pxx):", min_value=1.0, max_value=99.0, value=50.0)
+st.markdown("---")
 
-if input_text:
-    # Procesar datos
-    try:
-        raw_data = input_text.replace(',', '\n').split('\n')
-        data = [float(x.strip()) for x in raw_data if x.strip()]
-        data = np.array(data)
-        n_datos = len(data)
-        
-        st.sidebar.success(f"✅ {n_datos} datos cargados correctamente.")
-        
-        if n_datos < 5:
-            st.error("Por favor ingresa al menos 5 datos para un análisis estadístico mínimo.")
-            st.stop()
+# 2. BARRA LATERAL (Solo entradas de configuración)
+st.sidebar.header("1. Configuración de Análisis")
+input_text = st.sidebar.text_area("Datos de entrada (Pegar aquí):", height=200, value="105.5\n98.2\n134.1\n155.9\n78.4\n112.0\n143.8\n122.5\n95.0\n110.2\n130.5\n85.6\n145.2\n102.3\n118.7")
+num_simulaciones = st.sidebar.slider("Simulaciones Monte Carlo", 100, 5000, 1000)
+
+# Botón de ejecución PRINCIPAL
+ejecutar = st.sidebar.button("🚀 Ejecutar Análisis Completo")
+
+# 3. LÓGICA DE PROCESAMIENTO Y SESSION STATE
+
+# Inicializar estado si no existe
+if 'resultados' not in st.session_state:
+    st.session_state['resultados'] = None
+if 'datos_procesados' not in st.session_state:
+    st.session_state['datos_procesados'] = None
+
+# Si se presiona el botón, hacemos el cálculo pesado y GUARDAMOS en session_state
+if ejecutar:
+    if input_text:
+        try:
+            # Procesar datos
+            raw_data = input_text.replace(',', '\n').split('\n')
+            data = np.array([float(x.strip()) for x in raw_data if x.strip()])
             
-    except ValueError:
-        st.sidebar.error("Error en el formato de datos. Asegúrate de usar números.")
-        st.stop()
+            if len(data) < 5:
+                st.error("Se necesitan al menos 5 datos.")
+            else:
+                st.session_state['datos_procesados'] = data # Guardar datos
+                
+                with st.spinner('Ajustando distribuciones y simulando... (Esto ocurre solo una vez)'):
+                    results_list = []
+                    dist_defs = [
+                        ('Normal', stats.norm, {}),
+                        ('Lognormal', stats.lognorm, {'floc': 0}),
+                        ('Weibull', stats.weibull_min, {'floc': 0}),
+                        ('Gamma', stats.gamma, {'floc': 0}),
+                        ('Exponencial', stats.expon, {'floc': 0})
+                    ]
+                    
+                    best_p = -1
+                    best_name = ""
+                    
+                    prog_bar = st.progress(0)
+                    for i, (name, func, const) in enumerate(dist_defs):
+                        params = func.fit(data, **const)
+                        p_val = monte_carlo_p_value(data, name, params, n_sim=num_simulaciones)
+                        
+                        results_list.append({
+                            "Distribución": name,
+                            "P-Value": p_val,
+                            "Params": params,
+                            "Obj": func # Guardamos el objeto función para usarlo luego
+                        })
+                        
+                        if p_val > best_p:
+                            best_p = p_val
+                            best_name = name
+                            
+                        prog_bar.progress((i + 1) / len(dist_defs))
+                    
+                    # Ordenar resultados y guardar en memoria
+                    df_res = pd.DataFrame(results_list).sort_values(by="P-Value", ascending=False)
+                    st.session_state['resultados'] = df_res
+                    st.session_state['mejor_ajuste'] = best_name
+                    
+        except ValueError:
+            st.error("Error en formato de datos.")
 
-    # --- PROCESAMIENTO PRINCIPAL ---
+# 4. VISUALIZACIÓN E INTERACTIVIDAD (Lee de session_state)
+
+# Solo mostramos cosas si ya hay resultados en memoria
+if st.session_state['resultados'] is not None:
     
-    if st.button("Ejecutar Análisis"):
+    data = st.session_state['datos_procesados']
+    df_results = st.session_state['resultados']
+    best_dist = st.session_state['mejor_ajuste']
+    
+    # --- SECCIÓN DE RESULTADOS ---
+    col_res, col_calc = st.columns([1.5, 1])
+    
+    with col_res:
+        st.subheader("📊 Tabla de Resultados")
+        # Mostramos tabla coloreando la mejor
+        st.dataframe(
+            df_results[['Distribución', 'P-Value']].style.apply(
+                lambda x: ['background-color: #d4edda' if x['Distribución'] == best_dist else '' for i in x], 
+                axis=1
+            ), 
+            use_container_width=True
+        )
+        st.caption(f"Mejor ajuste sugerido: **{best_dist}**")
+
+    with col_calc:
+        st.subheader("🧮 Calculadora Interactiva")
+        st.markdown("Calcula percentiles **al instante** sin re-simular.")
         
-        with st.spinner('Ajustando distribuciones y ejecutando Monte Carlo...'):
-            results = []
-            
-            # Definir distribuciones a probar
-            dist_list = [
-                ('Normal', stats.norm, {}),
-                ('Lognormal', stats.lognorm, {'floc': 0}), # 2-parameter lognormal
-                ('Weibull', stats.weibull_min, {'floc': 0}), # 2-parameter weibull
-                ('Gamma', stats.gamma, {'floc': 0}),
-                ('Exponencial', stats.expon, {'floc': 0})
-            ]
-            
-            best_dist_name = ""
-            best_p_value = -1
-            best_params = None
-            
-            # Barra de progreso
-            progress_bar = st.progress(0)
-            
-            for i, (name, func, constraints) in enumerate(dist_list):
-                # 1. Ajuste (MLE)
-                params = func.fit(data, **constraints)
-                
-                # 2. Calcular P-Value (Monte Carlo)
-                p_val = monte_carlo_p_value(data, name, params, n_sim=num_simulaciones)
-                
-                # Guardar resultados
-                param_str = ", ".join([f"{p:.4f}" for p in params])
-                results.append({
-                    "Distribución": name,
-                    "P-Value (A-D)": p_val,
-                    "Parámetros": param_str,
-                    "Params_Obj": params, # Guardar objeto para gráficos
-                    "Func_Obj": func
-                })
-                
-                # Determinar el mejor ajuste (mayor p-value)
-                if p_val > best_p_value:
-                    best_p_value = p_val
-                    best_dist_name = name
-                    best_params = params
-                
-                progress_bar.progress((i + 1) / len(dist_list))
-            
-            # Crear DataFrame de resultados
-            df_results = pd.DataFrame(results).drop(columns=["Params_Obj", "Func_Obj"])
-            df_results = df_results.sort_values(by="P-Value (A-D)", ascending=False)
-            
-            # --- MOSTRAR RESULTADOS ---
-            
-            col1, col2 = st.columns([1, 2])
-            
-            with col1:
-                st.subheader("Resultados del Ajuste")
-                st.dataframe(df_results.style.apply(lambda x: ['background-color: #d4edda' if x['Distribución'] == best_dist_name else '' for i in x], axis=1))
-                
-                st.info(f"🏆 Mejor ajuste: **{best_dist_name}** con p-value de {best_p_value:.4f}")
-                
-                # Cálculo de Percentil
-                st.subheader(f"Cálculo de Percentiles ({best_dist_name})")
-                
-                # Recuperar función del mejor ajuste
-                best_row = [r for r in results if r['Distribución'] == best_dist_name][0]
-                best_func = best_row['Func_Obj']
-                
-                # Calcular valor del percentil solicitado
-                val_percentil = best_func.ppf(percentil_req / 100.0, *best_params)
-                st.metric(label=f"Valor para P{int(percentil_req)}", value=f"{val_percentil:.4f}")
-                
-                st.write("---")
-                st.write("**Parámetros detallados:**")
-                if best_dist_name == "Weibull":
-                    st.write(f"Forma (k/beta): {best_params[0]:.4f}")
-                    st.write(f"Escala (lambda/eta): {best_params[2]:.4f}")
-                elif best_dist_name == "Normal":
-                    st.write(f"Media: {best_params[0]:.4f}")
-                    st.write(f"Desv. Estándar: {best_params[1]:.4f}")
-                else:
-                    st.write(f"Raw Params: {best_params}")
+        # Selector de distribución (por defecto la mejor)
+        dist_options = df_results['Distribución'].tolist()
+        # Encontrar índice de la mejor para ponerla por defecto
+        default_idx = dist_options.index(best_dist)
+        
+        sel_dist = st.selectbox("Selecciona Distribución:", dist_options, index=default_idx)
+        sel_percentil = st.number_input("Percentil deseado (Pxx):", 1.0, 99.9, 50.0, step=0.5)
+        
+        # --- CÁLCULO INSTANTÁNEO ---
+        # Buscar la fila correspondiente en los resultados guardados
+        row = df_results[df_results['Distribución'] == sel_dist].iloc[0]
+        func_obj = row['Obj']
+        params_obj = row['Params']
+        
+        # Calcular PPF (Percent Point Function)
+        resultado_percentil = func_obj.ppf(sel_percentil / 100.0, *params_obj)
+        
+        st.success(f"**P{sel_percentil} ({sel_dist}) = {resultado_percentil:.4f}**")
+        
+        with st.expander("Ver parámetros técnicos"):
+            st.write(f"Parámetros: {params_obj}")
 
-            with col2:
-                st.subheader("Visualización Gráfica")
-                
-                # --- KAPLAN-MEIER (Empírico) ---
-                kmf = KaplanMeierFitter()
-                kmf.fit(data)
-                km_df = kmf.cumulative_density_
-                km_surv = kmf.survival_function_
-                
-                # Rango para gráficos (X axis)
-                x_min, x_max = 0, max(data) * 1.2
-                x_vals = np.linspace(x_min, x_max, 200)
-                
-                # Crear pestañas
-                tab1, tab2, tab3 = st.tabs(["PDF (Densidad)", "CDF (Acumulada Directa)", "Supervivencia (Acumulada Indirecta)"])
-                
-                # --- TAB 1: PDF ---
-                with tab1:
-                    fig_pdf = go.Figure()
-                    # Histograma de datos
-                    fig_pdf.add_trace(go.Histogram(x=data, histnorm='probability density', name='Datos Reales', opacity=0.5, marker_color='gray'))
-                    
-                    # Curvas de las distribuciones seleccionadas
-                    for res in results:
-                        y_vals = res['Func_Obj'].pdf(x_vals, *res['Params_Obj'])
-                        
-                        # Resaltar la mejor
-                        line_width = 4 if res['Distribución'] == best_dist_name else 1
-                        opacity = 1 if res['Distribución'] == best_dist_name else 0.4
-                        
-                        fig_pdf.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=res['Distribución'], line=dict(width=line_width), opacity=opacity))
-                    
-                    fig_pdf.update_layout(title="Función de Densidad de Probabilidad (PDF)", xaxis_title="Valor", yaxis_title="Densidad")
-                    st.plotly_chart(fig_pdf, use_container_width=True)
+    st.divider()
 
-                # --- TAB 2: CDF (Comparación con Kaplan-Meier) ---
-                with tab2:
-                    fig_cdf = go.Figure()
-                    
-                    # Kaplan-Meier (Puntos empíricos) - Usamos steps para simular la escalera
-                    fig_cdf.add_trace(go.Scatter(x=km_df.index, y=km_df.iloc[:, 0], mode='lines+markers', name='Empírico (Kaplan-Meier)', line=dict(shape='hv', color='black', dash='dash')))
-                    
-                    for res in results:
-                        y_vals = res['Func_Obj'].cdf(x_vals, *res['Params_Obj'])
-                        line_width = 4 if res['Distribución'] == best_dist_name else 1
-                        
-                        fig_cdf.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=res['Distribución'], line=dict(width=line_width)))
-                        
-                    fig_cdf.update_layout(title="Función de Distribución Acumulada (CDF)", xaxis_title="Valor", yaxis_title="Probabilidad Acumulada")
-                    st.plotly_chart(fig_cdf, use_container_width=True)
+    # --- SECCIÓN DE GRÁFICOS ---
+    st.subheader("📈 Curvas de Comportamiento")
+    
+    # Preparar datos Kaplan-Meier
+    kmf = KaplanMeierFitter()
+    kmf.fit(data)
+    km_df = kmf.cumulative_density_
+    km_surv = kmf.survival_function_
+    
+    x_vals = np.linspace(0, max(data)*1.2, 200)
+    
+    tab1, tab2, tab3 = st.tabs(["Densidad (PDF)", "Acumulada (CDF)", "Confiabilidad (R(t))"])
+    
+    # TAB 1: PDF
+    with tab1:
+        fig = go.Figure()
+        fig.add_trace(go.Histogram(x=data, histnorm='probability density', name='Datos', opacity=0.3, marker_color='grey'))
+        for _, row in df_results.iterrows():
+            y = row['Obj'].pdf(x_vals, *row['Params'])
+            width = 4 if row['Distribución'] == sel_dist else 1 # Resaltar la seleccionada en el dropdown
+            opacity = 1 if row['Distribución'] == sel_dist else 0.3
+            fig.add_trace(go.Scatter(x=x_vals, y=y, mode='lines', name=row['Distribución'], line=dict(width=width), opacity=opacity))
+        st.plotly_chart(fig, use_container_width=True)
 
-                # --- TAB 3: RELIABILITY / SURVIVAL (1 - CDF) ---
-                with tab3:
-                    fig_rel = go.Figure()
-                    
-                    # Kaplan-Meier Supervivencia
-                    fig_rel.add_trace(go.Scatter(x=km_surv.index, y=km_surv.iloc[:, 0], mode='lines+markers', name='Empírico (Kaplan-Meier)', line=dict(shape='hv', color='black', dash='dash')))
-                    
-                    for res in results:
-                        # Survival = 1 - CDF (o usar sf si disponible)
-                        y_vals = res['Func_Obj'].sf(x_vals, *res['Params_Obj'])
-                        line_width = 4 if res['Distribución'] == best_dist_name else 1
-                        
-                        fig_rel.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=res['Distribución'], line=dict(width=line_width)))
-                        
-                    fig_rel.update_layout(title="Función de Confiabilidad/Supervivencia (R(t) = 1 - CDF)", xaxis_title="Valor", yaxis_title="Probabilidad de Supervivencia")
-                    st.plotly_chart(fig_rel, use_container_width=True)
+    # TAB 2: CDF
+    with tab2:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=km_df.index, y=km_df.iloc[:,0], mode='lines+markers', name='Empírico (K-M)', line=dict(dash='dash', color='black')))
+        for _, row in df_results.iterrows():
+            y = row['Obj'].cdf(x_vals, *row['Params'])
+            width = 4 if row['Distribución'] == sel_dist else 1
+            opacity = 1 if row['Distribución'] == sel_dist else 0.3
+            fig.add_trace(go.Scatter(x=x_vals, y=y, mode='lines', name=row['Distribución'], line=dict(width=width), opacity=opacity))
+        st.plotly_chart(fig, use_container_width=True)
+
+    # TAB 3: Reliability
+    with tab3:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=km_surv.index, y=km_surv.iloc[:,0], mode='lines+markers', name='Empírico (K-M)', line=dict(dash='dash', color='black')))
+        for _, row in df_results.iterrows():
+            y = row['Obj'].sf(x_vals, *row['Params'])
+            width = 4 if row['Distribución'] == sel_dist else 1
+            opacity = 1 if row['Distribución'] == sel_dist else 0.3
+            fig.add_trace(go.Scatter(x=x_vals, y=y, mode='lines', name=row['Distribución'], line=dict(width=width), opacity=opacity))
+        st.plotly_chart(fig, use_container_width=True)
 
 else:
-    st.info("Esperando datos en el panel lateral para iniciar el cálculo...")
+    st.info("👈 Pega tus datos en la barra lateral y presiona 'Ejecutar Análisis' para comenzar.")
