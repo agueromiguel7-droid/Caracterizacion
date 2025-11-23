@@ -9,7 +9,7 @@ import os # Para verificar si existe la imagen
 # --- CONFIGURACIÓN DE PÁGINA E ICONO ---
 # Intentamos usar tu logo como favicon, si falla usamos un emoji
 try:
-    st.set_page_config(page_title="RAM Fitter Pro", layout="wide", page_icon="mi_logo.png")
+    st.set_page_config(page_title="RAM Fitter Pro", layout="wide", page_icon="Logo_Prod_Risk_Solution.png")
 except:
     st.set_page_config(page_title="RAM Fitter Pro", layout="wide", page_icon="📊")
 
@@ -74,7 +74,7 @@ with col_logo:
         st.warning("Sin Logo")
 
 with col_titulo:
-    st.title("Herramienta de Caracterización Probabilística (RAM)")
+    st.title("Herramienta de Caracterización Probabilística (R&DF)")
 
 st.markdown("---")
 
