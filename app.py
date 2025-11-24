@@ -71,34 +71,29 @@ def monte_carlo_analysis(data, dist_name, params, n_sim=1000):
 def format_params(dist_name, params):
     """Da formato legible y técnico a los parámetros calculados."""
     if dist_name == 'Normal':
-        # params: (mu, sigma)
         return f"Media (μ): {params[0]:.4f}, Desv. (σ): {params[1]:.4f}"
     
     elif dist_name == 'Lognormal':
-        # params scypy: (s, loc, scale) -> scale = exp(mu_log)
-        # Queremos: mu_log y sigma_log
-        sigma_log = params[0] # Shape parameter s es sigma_log
+        # Conversión técnica para ingeniería
+        sigma_log = params[0] # Shape parameter
         scale = params[2]
         mu_log = np.log(scale)
         return f"Media Log (μ_log): {mu_log:.4f}, Desv. Log (σ_log): {sigma_log:.4f}"
     
     elif dist_name == 'Weibull':
-        # params scipy: (c, loc, scale) -> c es forma, scale es escala
         forma = params[0]
         escala = params[2]
         return f"Forma (β): {forma:.4f}, Escala (η): {escala:.4f}"
     
     elif dist_name == 'Gamma':
-        # params scipy: (a, loc, scale) -> a es forma, scale es theta
         forma = params[0]
         escala = params[2]
         return f"Forma (α): {forma:.4f}, Escala (θ): {escala:.4f}"
         
     elif dist_name == 'Exponencial':
-        # params scipy: (loc, scale) -> scale = 1/lambda (Mean Time)
         mean_time = params[1]
         tasa = 1.0 / mean_time
-        return f"Tasa (λ): {tasa:.5f}, MTBF (1/λ): {mean_time:.2f}"
+        return f"Tasa (λ): {tasa:.5f}, MTBF: {mean_time:.2f}"
     
     return str(params)
 
@@ -107,24 +102,21 @@ def format_params(dist_name, params):
 col_logo, col_titulo = st.columns([1, 8])
 with col_logo:
     if os.path.exists("Logo_Prod_Risk_Solution.png"):
-        st.image("Logo_Prod_Risk_Solution.png", width=100)
+        st.image("mi_logo.png", width=100)
     else:
-        st.write("📊") # Emoji si no hay logo
+        st.write("📊") 
 with col_titulo:
-    st.title("Herramienta de Caracterización Probabilística (R&DF)")
+    st.title("Herramienta de Caracterización Probabilística (RAM)")
 
 st.markdown("---")
 
 # --- BARRA LATERAL ---
-st.sidebar.header("1. Configuración")
+st.sidebar.header("Configuración")
 
-# Botón de Reinicio (Punto 4)
 if st.sidebar.button("🗑️ Borrar Todo / Reiniciar"):
     st.session_state.clear()
     st.rerun()
 
-# Text Area vinculado a session_state para poder borrarlo si es necesario, 
-# pero le damos un valor por defecto si está vacío.
 if 'default_input' not in st.session_state:
     st.session_state['default_input'] = "105.5\n98.2\n134.1\n155.9\n78.4\n112.0\n143.8\n122.5\n95.0\n110.2\n130.5\n85.6\n145.2\n102.3\n118.7"
 
@@ -163,18 +155,13 @@ if ejecutar:
                     
                     prog_bar = st.progress(0)
                     for i, (name, func, const) in enumerate(dist_defs):
-                        # 1. Ajuste MLE
                         params = func.fit(data, **const)
-                        
-                        # 2. Monte Carlo (Obtenemos P-value y AD-Stat)
                         p_val, ad_stat = monte_carlo_analysis(data, name, params, n_sim=num_simulaciones)
-                        
-                        # 3. Formatear Parámetros (Puntos 1 y 2)
                         params_str = format_params(name, params)
                         
                         results_list.append({
                             "Distribución": name,
-                            "Estadístico A-D": ad_stat, # (Punto 3)
+                            "Estadístico A-D": ad_stat,
                             "P-Value": p_val,
                             "Parámetros Técnicos": params_str,
                             "Params_Raw": params,
@@ -201,13 +188,11 @@ if st.session_state['resultados'] is not None:
     df_results = st.session_state['resultados']
     best_dist = st.session_state['mejor_ajuste']
     
-    # 1. TABLA DE RESULTADOS
+    # 1. TABLA
     st.subheader("📊 Tabla de Resultados de Ajuste")
     
-    # Preparamos el dataframe para mostrar (ocultamos las columnas de objetos internos)
     display_df = df_results[['Distribución', 'Estadístico A-D', 'P-Value', 'Parámetros Técnicos']].copy()
     
-    # Formato visual
     st.dataframe(
         display_df.style.format({
             "Estadístico A-D": "{:.4f}",
@@ -221,7 +206,7 @@ if st.session_state['resultados'] is not None:
     
     with col_der:
         st.info(f"🏆 Mejor Ajuste: **{best_dist}**")
-        st.markdown("### 🧮 Calculadora de Percentiles")
+        st.markdown("### 🧮 Calculadora Percentiles")
         
         dist_options = df_results['Distribución'].tolist()
         default_idx = dist_options.index(best_dist)
@@ -229,14 +214,13 @@ if st.session_state['resultados'] is not None:
         sel_dist = st.selectbox("Selecciona Distribución:", dist_options, index=default_idx)
         sel_percentil = st.number_input("Percentil (Pxx):", 0.1, 99.9, 50.0, step=0.5)
         
-        # Cálculo on-the-fly
         row = df_results[df_results['Distribución'] == sel_dist].iloc[0]
         func_obj = row['Obj']
         params_raw = row['Params_Raw']
         
         val_res = func_obj.ppf(sel_percentil / 100.0, *params_raw)
         st.success(f"**P{sel_percentil} = {val_res:.4f}**")
-        st.caption(f"Parámetros usados: {row['Parámetros Técnicos']}")
+        st.caption(f"Parámetros: {row['Parámetros Técnicos']}")
 
     with col_izq:
         st.markdown("### 📈 Visualización Gráfica")
@@ -244,47 +228,46 @@ if st.session_state['resultados'] is not None:
         kmf = KaplanMeierFitter()
         kmf.fit(data)
         km_cdf = kmf.cumulative_density_
+        km_surv = kmf.survival_function_ # Obtener supervivencia para la inversa
         
         x_vals = np.linspace(0, max(data)*1.2, 300)
         
-        tab1, tab2 = st.tabs(["Densidad (PDF)", "Acumulada Dir (CDF)", "Acumulada Inv (R(t))"])
+        # AHORA SON 3 PESTAÑAS
+        tab1, tab2, tab3 = st.tabs(["Densidad (PDF)", "Acumulada Directa (CDF)", "Acumulada Inversa (R(t))"])
         
         with tab1:
             fig = go.Figure()
             fig.add_trace(go.Histogram(x=data, histnorm='probability density', name='Datos', opacity=0.3, marker_color='grey'))
             for _, r in df_results.iterrows():
                 y = r['Obj'].pdf(x_vals, *r['Params_Raw'])
-                is_selected = (r['Distribución'] == sel_dist)
-                fig.add_trace(go.Scatter(
-                    x=x_vals, y=y, mode='lines', name=r['Distribución'],
-                    line=dict(width=4 if is_selected else 1),
-                    opacity=1 if is_selected else 0.3
-                ))
+                is_sel = (r['Distribución'] == sel_dist)
+                fig.add_trace(go.Scatter(x=x_vals, y=y, mode='lines', name=r['Distribución'], line=dict(width=4 if is_sel else 1), opacity=1 if is_sel else 0.3))
+            fig.update_layout(title="Densidad de Probabilidad", xaxis_title="Datos", yaxis_title="Densidad")
             st.plotly_chart(fig, use_container_width=True)
             
         with tab2:
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=km_cdf.index, y=km_cdf.iloc[:,0], mode='lines+markers', name='Kaplan-Meier', line=dict(dash='dash', color='black')))
+            fig.add_trace(go.Scatter(x=km_cdf.index, y=km_cdf.iloc[:,0], mode='lines+markers', name='Kaplan-Meier (Empírico)', line=dict(dash='dash', color='black')))
             for _, r in df_results.iterrows():
                 y = r['Obj'].cdf(x_vals, *r['Params_Raw'])
-                is_selected = (r['Distribución'] == sel_dist)
-                fig.add_trace(go.Scatter(
-                    x=x_vals, y=y, mode='lines', name=r['Distribución'],
-                    line=dict(width=4 if is_selected else 1),
-                    opacity=1 if is_selected else 0.3
-                ))
+                is_sel = (r['Distribución'] == sel_dist)
+                fig.add_trace(go.Scatter(x=x_vals, y=y, mode='lines', name=r['Distribución'], line=dict(width=4 if is_sel else 1), opacity=1 if is_sel else 0.3))
+            fig.update_layout(title="Distribución Acumulada Directa", xaxis_title="Datos", yaxis_title="Probabilidad Acumulada")
             st.plotly_chart(fig, use_container_width=True)
-	# TAB 3: Reliability
-    
-	with tab3:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=km_surv.index, y=km_surv.iloc[:,0], mode='lines+markers', name='Empírico (Kaplan-Meier)', line=dict(dash='dash', color='black')))
-        for _, row in df_results.iterrows():
-            y = row['Obj'].sf(x_vals, *row['Params_Raw'])
-            width = 4 if row['Distribución'] == sel_dist else 1
-            opacity = 1 if row['Distribución'] == sel_dist else 0.3
-            fig.add_trace(go.Scatter(x=x_vals, y=y, mode='lines', name=row['Distribución'], line=dict(width=4 if is_selected else 1), opacity=1 if is_selected else 0.3))
-        st.plotly_chart(fig, use_container_width=True)
+            
+        with tab3: # <-- PESTAÑA RESTAURADA
+            fig = go.Figure()
+            # Kaplan-Meier Survival
+            fig.add_trace(go.Scatter(x=km_surv.index, y=km_surv.iloc[:,0], mode='lines+markers', name='Kaplan-Meier (Empírico)', line=dict(dash='dash', color='black')))
+            
+            for _, r in df_results.iterrows():
+                # Survival function (SF) = 1 - CDF
+                y = r['Obj'].sf(x_vals, *r['Params_Raw'])
+                is_sel = (r['Distribución'] == sel_dist)
+                fig.add_trace(go.Scatter(x=x_vals, y=y, mode='lines', name=r['Distribución'], line=dict(width=4 if is_sel else 1), opacity=1 if is_sel else 0.3))
+            
+            fig.update_layout(title="Acumulada Inversa / Confiabilidad R(t)", xaxis_title="Datos", yaxis_title="Probabilidad (1-CDF)")
+            st.plotly_chart(fig, use_container_width=True)
 
 else:
     st.info("👈 Ingresa datos en el panel lateral y presiona 'Ejecutar'.")
