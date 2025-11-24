@@ -4,7 +4,7 @@ import numpy as np
 import scipy.stats as stats
 from lifelines import KaplanMeierFitter
 import plotly.graph_objects as go
-import os
+import os # Para verificar si existe la imagen
 
 # --- CONFIGURACIÓN INICIAL ---
 try:
@@ -102,11 +102,11 @@ def format_params(dist_name, params):
 col_logo, col_titulo = st.columns([1, 8])
 with col_logo:
     if os.path.exists("Logo_Prod_Risk_Solution.png"):
-        st.image("mi_logo.png", width=100)
+        st.image("Logo_Prod_Risk_Solution.png", width=100)
     else:
         st.write("📊") 
 with col_titulo:
-    st.title("Herramienta de Caracterización Probabilística (RAM)")
+    st.title("Herramienta de Caracterización Probabilística (R&DF)")
 
 st.markdown("---")
 
