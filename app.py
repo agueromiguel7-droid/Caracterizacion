@@ -116,7 +116,7 @@ with col_titulo:
 st.markdown("---")
 
 # --- BARRA LATERAL ---
-st.sidebar.header("Configuración")
+st.sidebar.header("1. Configuración")
 
 # Botón de Reinicio (Punto 4)
 if st.sidebar.button("🗑️ Borrar Todo / Reiniciar"):
@@ -247,7 +247,7 @@ if st.session_state['resultados'] is not None:
         
         x_vals = np.linspace(0, max(data)*1.2, 300)
         
-        tab1, tab2 = st.tabs(["Densidad (PDF)", "Acumulada (CDF)"])
+        tab1, tab2 = st.tabs(["Densidad (PDF)", "Acumulada Dir (CDF)", "Acumulada Inv (R(t))"])
         
         with tab1:
             fig = go.Figure()
@@ -274,6 +274,17 @@ if st.session_state['resultados'] is not None:
                     opacity=1 if is_selected else 0.3
                 ))
             st.plotly_chart(fig, use_container_width=True)
+	# TAB 3: Reliability
+    
+	with tab3:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=km_surv.index, y=km_surv.iloc[:,0], mode='lines+markers', name='Empírico (Kaplan-Meier)', line=dict(dash='dash', color='black')))
+        for _, row in df_results.iterrows():
+            y = row['Obj'].sf(x_vals, *row['Params_Raw'])
+            width = 4 if row['Distribución'] == sel_dist else 1
+            opacity = 1 if row['Distribución'] == sel_dist else 0.3
+            fig.add_trace(go.Scatter(x=x_vals, y=y, mode='lines', name=row['Distribución'], line=dict(width=4 if is_selected else 1), opacity=1 if is_selected else 0.3))
+        st.plotly_chart(fig, use_container_width=True)
 
 else:
     st.info("👈 Ingresa datos en el panel lateral y presiona 'Ejecutar'.")
